@@ -1,0 +1,9 @@
+[submodule "libs/OPCP"]
+	path = libs/OPCP
+	url = https://github.com/hubject/opcp.git
+[submodule "libs/Styx"]
+	path = libs/Styx
+	url = git@github.com:Vanaheimr/Styx.git
+[submodule "libs/Hermod"]
+	path = libs/Hermod
+	url = git@github.com:Vanaheimr/Hermod.git
