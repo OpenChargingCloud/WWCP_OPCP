@@ -124,8 +124,8 @@ WWCP_OPCP/
 │   │                         CA_Type (mo|cpo|oem|cps|veh, optional operator prefix),
 │   │                         ISO_Version (ISO15118-2|ISO15118-20), WebhookEndpointStatus, OPCPRole
 │   ├── Shared/               OPCPError (errorMessages[] + traceId — the one shared error type that
-│   │                         rcp/pcp/ccp $ref from cps.v1.json), Certificate (base64-DER wrapper,
-│   │                         lazy BouncyCastle parse → DN, CN, serial, SKI/AKI, validity,
+│   │                         rcp/pcp/ccp $ref from cps.v1.json), PnCCertificate (base64-DER
+│   │                         wrapper, BouncyCastle parse → DN, CN, serial, SKI/AKI, validity,
 │   │                         SHA-256/SHA-1 fingerprints, PEM export), Metadata
 │   ├── RCP/                  RootCertificate (RootCertV2), AddRootCertificateRequest,
 │   │                         GetAllRootCertsResponse, GetRootCertResponse, CertificateTrustList (stub)
@@ -275,7 +275,8 @@ honor and the **clients** must expose:
 | CCP 404 polymorphism | branch on payload shape, not status code |
 | Legacy `priority` vs `defaultContract` | model `defaultContract`, tolerate `priority` on input |
 | PCP rename notices (`subCA1Certificate`→`subCa1Certificate`, `vehicleCertificate`→`provisioningCertificate`) | accept both on parse, emit current spec names |
-| AKI dual encoding (base64 vs hex-with-colons) | `Certificate` exposes both |
+| AKI dual encoding (base64 vs hex-with-colons) | `PnCCertificate` exposes both |
+| EMAID/PCID path patterns write the groups as `\w`, which admits underscores, while the narrative normalization rule is strictly alphanumeric | the stricter rule wins — an underscore is nothing ISO 15118 can carry |
 
 ### 5.5 PKI / crypto layer (BouncyCastle where .NET can't)
 Reused from **Hermod `PKI/PKIFactory`** (already BC 2.7.0-based): EC/Ed448 key generation, root/intermediate
@@ -380,6 +381,31 @@ account needed. Optional: run the `LiveHubject` category against `plugncharge-te
 `OPCP_CLIENT_ID`/`OPCP_CLIENT_SECRET` environment variables.
 
 ---
+
+## 8a. Progress
+
+**Phase 0 — done.** Repository, solution and both projects; `OPCPSpecification` recording the
+implemented revision, guarded by `SpecificationDriftTests` reading the submodule on every run.
+
+**Phase 1 — done**, with three adjustments made while building it:
+
+* **Identifiers built:** `EMA_Id`, `PCID`, `WMI`, `Provider_Id`, `RootCertificate_Id`, `Trace_Id`.
+  `EVSE_Id` and `SECC_Id` moved to phase 6 and `Session_Id` to phase 5 — each is used by exactly one
+  service, and their grammars are better pinned down beside the operation that validates them than
+  guessed at now (`Session_Id` in particular: the specification says only "HEX" and its error text
+  "maximum 8" does not say whether that counts bytes or characters).
+* **`Certificate` renamed to `PnCCertificate`.** Illias already publishes a static
+  `org.GraphDefined.Vanaheimr.Illias.Certificate`; a second type of that name would be ambiguous
+  for any consumer importing both namespaces.
+* **The token layer is complete except its HTTP fetch.** `ClientCredentialsTokenProvider` owns the
+  caching and renewal — the part worth testing on its own — and takes *how* to obtain a token as a
+  delegate. `AccessTokenClient` and the `AOPCPHTTPClient` base class it needs are built in phase 2
+  alongside the RCP slice, where they get their first real endpoint to talk to rather than being
+  written against nothing.
+
+Certificates are parsed through BouncyCastle rather than `X509Certificate2` throughout: OPCP admits
+Ed448, and whether a platform certificate store loads one is a platform question this library should
+not be asking.
 
 ## 9. Decisions taken (overridable)
 
