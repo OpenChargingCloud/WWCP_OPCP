@@ -21,6 +21,9 @@ using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography;
 
 using Org.BouncyCastle.Asn1;
+using Org.BouncyCastle.Asn1.EdEC;
+using Org.BouncyCastle.Asn1.Sec;
+using Org.BouncyCastle.Asn1.X9;
 using Org.BouncyCastle.Asn1.X509;
 using Org.BouncyCastle.X509;
 
@@ -30,6 +33,10 @@ using org.GraphDefined.Vanaheimr.Hermod.PKI;
 using BCX509                    = Org.BouncyCastle.X509.X509Certificate;
 using BCSubjectKeyIdentifier    = Org.BouncyCastle.Asn1.X509.SubjectKeyIdentifier;
 using BCAuthorityKeyIdentifier  = Org.BouncyCastle.Asn1.X509.AuthorityKeyIdentifier;
+
+// The property below is named for the specification's field; the alias keeps the
+// vocabulary type reachable from inside this class all the same.
+using OPCPSignatureAlgorithm    = cloud.charging.open.protocols.opcp.SignatureAlgorithm;
 
 #endregion
 
@@ -91,6 +98,12 @@ namespace cloud.charging.open.protocols.opcp
         public String          CommonName                { get; }
 
         /// <summary>
+        /// The organization named in the subject, when there is one. The root certificate
+        /// pool publishes this beside the certificate as 'organizationName'.
+        /// </summary>
+        public String?         Organization              { get; }
+
+        /// <summary>
         /// The distinguished name of the issuer.
         /// </summary>
         public String          IssuerName                { get; }
@@ -128,10 +141,17 @@ namespace cloud.charging.open.protocols.opcp
         public Boolean         IsCertificateAuthority    { get; }
 
         /// <summary>
-        /// The name of the algorithm this certificate was signed with.
+        /// The name of the algorithm this certificate was signed with,
+        /// e.g. "SHA-256withECDSA".
         /// </summary>
         public String          SignatureAlgorithmName
             => certificate.SigAlgName;
+
+        /// <summary>
+        /// The curve of this certificate's key, in the vocabulary OPCP names its three
+        /// signature algorithms by - or null for a key of some other kind.
+        /// </summary>
+        public OPCPSignatureAlgorithm?  SignatureAlgorithm    { get; }
 
         /// <summary>
         /// The SHA-256 fingerprint of the DER encoding, as lowercase hexadecimal without
@@ -171,6 +191,8 @@ namespace cloud.charging.open.protocols.opcp
 
             this.SubjectName             = ToDistinguishedName(Certificate.SubjectDN);
             this.IssuerName              = ToDistinguishedName(Certificate.IssuerDN);
+            this.Organization            = GetAttribute(Certificate.SubjectDN, X509Name.O);
+            this.SignatureAlgorithm      = ParseSignatureAlgorithm(Certificate);
             this.CommonName              = PKIFactory.GetCommonName(Certificate.SubjectDN);
             this.SerialNumber            = Certificate.SerialNumber.ToString(16).ToLowerInvariant();
             this.NotBefore               = new DateTimeOffset(Certificate.NotBefore.ToUniversalTime(), TimeSpan.Zero);
@@ -399,6 +421,79 @@ namespace cloud.charging.open.protocols.opcp
         private static String ToDistinguishedName(X509Name Name)
 
             => Name.ToString(true, X509Name.DefaultSymbols);
+
+        #endregion
+
+        #region (private, static) GetAttribute(Name, OID)
+
+        /// <summary>
+        /// Read one attribute out of an X.501 name, e.g. the organization.
+        /// </summary>
+        private static String? GetAttribute(X509Name             Name,
+                                            DerObjectIdentifier  OID)
+        {
+
+            var oids    = Name.GetOidList();
+            var values  = Name.GetValueList();
+
+            for (var i = 0; i < oids.Count; i++)
+                if (oids[i] is DerObjectIdentifier oid && oid.Equals(OID))
+                    return values[i]?.ToString();
+
+            return null;
+
+        }
+
+        #endregion
+
+        #region (private, static) ParseSignatureAlgorithm(Certificate)
+
+        /// <summary>
+        /// Name the certificate's key by its curve, in the vocabulary OPCP uses.
+        /// </summary>
+        /// <remarks>
+        /// OPCP calls these "signature algorithms" but names curves: secp256r1, secp521r1, ed448.
+        /// The curve is read from the key's own algorithm parameters, and the SEC name is asked
+        /// for first on purpose - BouncyCastle's general table answers "prime256v1" for the curve
+        /// the specification calls secp256r1, and they are the same curve under two names.
+        /// </remarks>
+        private static OPCPSignatureAlgorithm? ParseSignatureAlgorithm(BCX509 Certificate)
+        {
+
+            try
+            {
+
+                var algorithm = Certificate.CertificateStructure.SubjectPublicKeyInfo.Algorithm;
+
+                if (algorithm.Algorithm.Equals(EdECObjectIdentifiers.id_Ed448))
+                    return OPCPSignatureAlgorithm.ed448;
+
+                if (algorithm.Algorithm.Equals(EdECObjectIdentifiers.id_Ed25519))
+                    return OPCPSignatureAlgorithm.Parse("ed25519");
+
+                if (algorithm.Algorithm.Equals(X9ObjectIdentifiers.IdECPublicKey) &&
+                    algorithm.Parameters is not null)
+                {
+
+                    var curve  = DerObjectIdentifier.GetInstance(algorithm.Parameters);
+
+                    var name   = SecNamedCurves.    GetName(curve) ??
+                                 ECNamedCurveTable. GetName(curve);
+
+                    if (name.IsNotNullOrEmpty())
+                        return OPCPSignatureAlgorithm.Parse(name);
+
+                }
+
+            }
+            catch
+            { }
+
+            // An RSA or post-quantum key is not one of the three OPCP names, which is
+            // information rather than an error.
+            return null;
+
+        }
 
         #endregion
 

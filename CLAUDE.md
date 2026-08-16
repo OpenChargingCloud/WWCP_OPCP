@@ -49,4 +49,21 @@ two projects compile clean, and `WWCP_OPCP_Tests` builds with `TreatWarningsAsEr
   PKCS#10 creation, PKCS#7/CMS, OCSP, Ed448. Everything else is BCL or Hermod/Styx.
 - **Reuse Hermod's PKI** (`libs/Hermod/Hermod/PKI/PKIFactory.cs`): key generation, CA issuance, CSR
   *signing*, chain validation, PEM export. It cannot create CSRs, speak PKCS#7 or OCSP — those are
-  ours to write, in `WWCP_OPCP/PKI/`.
+  ours to write, in `WWCP_OPCP/PKI/`. Its `SubjectName` parameter is a bare common name, not a
+  distinguished name: the factory builds `CN={SubjectName}` itself.
+
+## Hermod HTTP, as it actually behaves
+
+Four things about mounting an API cost a debugging round each. `AOPCPHTTPAPI` handles all of them;
+follow it rather than rediscovering them.
+
+- **One API per path.** Each OPCP service is its own `HTTPAPI` under its own mount path
+  (`/v1/root/`, `/oauth/`, …). Two APIs at the same path throw at construction.
+- **A mount path must end in a slash.** The server strips the mount path off a request *by length*
+  and counts on that slash; without it the API sees `t/rootCerts` instead of `/rootCerts` and
+  nothing matches. `AOPCPHTTPAPI` normalizes it.
+- **Handler routes are relative to the mount path.** Use `Route("rootCerts")`, never
+  `URLPathPrefix + "..."` — that only worked when the API sat at the root.
+- **Path parameters are named.** Read them with `request.TryGetURLParameter("rootCertificateId")`.
+  The positional `ParsedURLParameters` array still exists but the current server no longer fills it,
+  so reading from it silently yields nothing.

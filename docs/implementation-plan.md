@@ -407,6 +407,24 @@ Certificates are parsed through BouncyCastle rather than `X509Certificate2` thro
 Ed448, and whether a platform certificate store loads one is a platform question this library should
 not be asking.
 
+**Phase 2 — done.** The HTTP layer and the Root Certificate Pool, both ends, over a real socket.
+
+* `AOPCPHTTPClient` and `AOPCPHTTPAPI` carry everything the six services share: bearer tokens, the
+  JSON request pipeline, the specification's error shape, role enforcement. `RCP_HTTPClient` and
+  `RCP_HTTPAPI` are the first pair built on them and the template for the rest.
+* `AccessToken_HTTPAPI` was added beyond the plan. Without it the ecosystem could verify a token but
+  not issue one, so `AccessTokenClient` — built here after being deferred from phase 1 — had nothing
+  to talk to. The ecosystem now authenticates end to end in-process.
+* **`RootCertificate` stores only what is not in the certificate**: the pool's identification, the
+  trust domain, and a few pointers the operator was handed. The distinguished name, common name,
+  organization, serial, both key-identifier encodings, validity, both fingerprints and the curve are
+  all derived, so no entry can describe itself incorrectly.
+* Four undocumented Hermod behaviours around mounting an API are recorded in `CLAUDE.md` — one API
+  per path, mount paths ending in a slash, routes relative to the mount, named path parameters.
+  `AOPCPHTTPAPI` absorbs all four.
+* The client reads OAuth2's `{error, error_description}` as well as the OPCP error shape: the token
+  endpoint is an OAuth2 endpoint before it is an OPCP one.
+
 ## 9. Decisions taken (overridable)
 
 1. **Namespace `cloud.charging.open.protocols.opcp`** (lowercase protocol segment, PascalCase sub-namespaces) without version suffix (single major version; split later if v2 breaks).
