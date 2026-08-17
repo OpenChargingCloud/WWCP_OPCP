@@ -547,6 +547,48 @@ The Certificate Provisioning Service, the other half of this phase:
   The two paths stay separate - an operator without a PKI of its own cannot use the signing path,
   and one with a PKI cannot use the generating path.
 
+**Phase 6 — done: the enrollment service, and the certificates everything else is made of.**
+
+* **`EVSE_Id` and `SECC_Id`** per the two ABNFs the identifier document gives, kept exactly as
+  given like every identifier that has to match a certificate subject. Both separators are read
+  (`*` as the enrollment interface writes them, `-` as the SECCID example does) and so is none at
+  all; the underscore its `\w` groups would admit is not, per §5.4. A SECCID's **check digit is
+  only read where a separator announces it** - without one, nothing distinguishes it from the last
+  character of the controller identification, and guessing would silently shorten it.
+* **`CA_Id` keeps both halves** of what the interface document's pattern allows: one of five
+  authority kinds, optionally prefixed with the operator running it. Dropping the prefix would
+  send an enrollment to the wrong authority; dropping the kind would lose what was asked for.
+* **The common-name rules are the point of the whole service.** Nothing in a certificate says what
+  it is for except its common name - the provisioning pool reads a vehicle out of one, the contract
+  pool a contract, a car a charging station. So `cpo` takes an EVSEID or a SECCID, `mo` an EMAID,
+  `oem` and `veh` a PCID, and `cps` anything, which is the one authority the specification states
+  no rule for. A malformed name is the caller's mistake and gets a 400; a well-formed name
+  belonging to somebody else gets a 403.
+* **Authority-by-authority authorization**, from the rights matrix rather than from the interface
+  document - which lists its four roles once for the whole operation and so cannot say that a
+  charge point operator has no business at the vehicle manufacturers' authority.
+* **PKCS#7, and the order that is not there.** The certificates travel in an ASN.1 SET OF, and DER
+  requires the members of a set to be sorted by their own encoding - so the leaf-first order an
+  enrollment answer is written in is *gone* by the time it is read. Rather than reach for a looser
+  encoding, `Pkcs7CertificateContainer` reconstructs the chain the way a verifier would: the
+  certificate nothing else in the set was issued by is the leaf, and each one after it issued the
+  one before.
+* **Enrollment hands back the leaf and the authorities; distribution hands back the root as well.**
+  The first follows the same rule as the rest of OPCP - the trust anchor does not travel, because
+  the recipient is supposed to have it from the root certificate pool. The second is the operation
+  whose whole point is to hand over an anchor, and RFC 7030 §4.1.3 says so.
+* **Two mounts again, for the same reason as the provisioning service's signer discovery.** The
+  interface document puts CA distribution at `/{ca}/cacerts/{iso-version}/{algorithm}/` - at the
+  root, with no prefix of any kind - while RFC 7030, which the same document calls itself fully
+  compliant with, puts it under `/.well-known/est`. Both are served. Mounting an API at the root
+  turns out to be safe: the server prefers the most specific mount and only falls back to the root
+  one when no deeper mount matches.
+* **One hierarchy per curve**, as a real V2G PKI has: the store is keyed by authority *and*
+  algorithm, enrollment picks the hierarchy matching the key in the request, and asking for a curve
+  the service does not operate gets a plain 404 rather than a chain a vehicle could not verify.
+* The media type carries `smime-type=certs-only` as RFC 7030 spells it, written as a header rather
+  than through `HTTPContentType`, which models only a charset parameter.
+
 ## 9. Decisions taken (overridable)
 
 1. **Namespace `cloud.charging.open.protocols.opcp`** (lowercase protocol segment, PascalCase sub-namespaces) without version suffix (single major version; split later if v2 breaks).

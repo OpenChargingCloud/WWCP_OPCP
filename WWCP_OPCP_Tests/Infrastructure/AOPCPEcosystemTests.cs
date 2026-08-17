@@ -78,6 +78,9 @@ namespace cloud.charging.open.protocols.opcp.Tests.Infrastructure
         /// <summary>The Certificate Provisioning Service.</summary>
         protected CPS_HTTPAPI      cpsAPI        = null!;
 
+        /// <summary>The V2G PKI's enrollment service.</summary>
+        protected EST_HTTPAPI      estAPI        = null!;
+
         /// <summary>The certificate the contract provisioning service signs with.</summary>
         protected IssuedCertificate  cpsSigner   = null!;
 
@@ -157,6 +160,29 @@ namespace cloud.charging.open.protocols.opcp.Tests.Infrastructure
                                   RootCertificates:           rcpAPI.Store,
                                   AccessTokenValidator:       tokenIssuer
                               );
+
+            #region The V2G PKI's enrollment service
+
+            var authorities = new InMemoryCertificateAuthorityStore();
+
+            await authorities.Add(CA_Id.Parse(CA_Type.CPO), pki.CPOSubCA2);
+            await authorities.Add(CA_Id.Parse(CA_Type.MO),  pki.V2GMOSubCA2);
+            await authorities.Add(CA_Id.Parse(CA_Type.CPS), pki.CPSSubCA2);
+            await authorities.Add(CA_Id.Parse(CA_Type.OEM), pki.OEMSubCA2);
+
+            // A real V2G PKI has a vehicle authority of its own below the V2G root, for the
+            // certificates ISO 15118-20 asks for. This infrastructure has one manufacturer
+            // authority and serves both from it, which is enough to exercise everything the
+            // enrollment service decides - the two ask for the same kind of common name.
+            await authorities.Add(CA_Id.Parse(CA_Type.VEH), pki.OEMSubCA2);
+
+            estAPI          = new EST_HTTPAPI(
+                                  httpServer,
+                                  authorities,
+                                  AccessTokenValidator: tokenIssuer
+                              );
+
+            #endregion
 
         }
 

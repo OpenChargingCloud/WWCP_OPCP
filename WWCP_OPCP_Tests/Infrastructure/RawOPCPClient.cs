@@ -76,6 +76,32 @@ namespace cloud.charging.open.protocols.opcp.Tests.Infrastructure
 
         #endregion
 
+        #region SendRawBytes(HTTPMethod, Path, Content, ContentType)
+
+        /// <summary>
+        /// Send one request whose body is not JSON, and return whatever came back, unexamined.
+        ///
+        /// Enrollment is the part of OPCP that speaks PKCS#10 and PKCS#7 rather than JSON, and
+        /// what a service does with a body that is neither is worth being able to ask.
+        /// </summary>
+        /// <param name="HTTPMethod">The HTTP method.</param>
+        /// <param name="Path">The path to send it to, valid or not.</param>
+        /// <param name="Content">The body, sensible or not.</param>
+        /// <param name="ContentType">What to call it.</param>
+        public Task<HTTPResponse> SendRawBytes(HTTPMethod        HTTPMethod,
+                                               String            Path,
+                                               Byte[]?           Content,
+                                               HTTPContentType?  ContentType)
+
+            => Send(
+                   HTTPMethod,
+                   HTTPPath.Parse(Path),
+                   Content,
+                   ContentType
+               );
+
+        #endregion
+
     }
 
 }

@@ -455,19 +455,35 @@ namespace cloud.charging.open.protocols.opcp
         /// <summary>
         /// Name the certificate's key by its curve, in the vocabulary OPCP uses.
         /// </summary>
+        private static OPCPSignatureAlgorithm? ParseSignatureAlgorithm(BCX509 Certificate)
+
+            => AlgorithmOf(Certificate.CertificateStructure.SubjectPublicKeyInfo);
+
+        #endregion
+
+        #region (static) AlgorithmOf(PublicKeyInfo)
+
+        /// <summary>
+        /// Name a public key by its curve, in the vocabulary OPCP uses.
+        ///
+        /// A certificate signing request carries the same structure a certificate does, and the
+        /// enrollment service reads the curve out of it to know which of its parallel hierarchies
+        /// the request belongs to.
+        /// </summary>
+        /// <param name="PublicKeyInfo">The public key and the algorithm it belongs to.</param>
         /// <remarks>
         /// OPCP calls these "signature algorithms" but names curves: secp256r1, secp521r1, ed448.
         /// The curve is read from the key's own algorithm parameters, and the SEC name is asked
         /// for first on purpose - BouncyCastle's general table answers "prime256v1" for the curve
         /// the specification calls secp256r1, and they are the same curve under two names.
         /// </remarks>
-        private static OPCPSignatureAlgorithm? ParseSignatureAlgorithm(BCX509 Certificate)
+        public static OPCPSignatureAlgorithm? AlgorithmOf(SubjectPublicKeyInfo PublicKeyInfo)
         {
 
             try
             {
 
-                var algorithm = Certificate.CertificateStructure.SubjectPublicKeyInfo.Algorithm;
+                var algorithm = PublicKeyInfo.Algorithm;
 
                 if (algorithm.Algorithm.Equals(EdECObjectIdentifiers.id_Ed448))
                     return OPCPSignatureAlgorithm.ed448;

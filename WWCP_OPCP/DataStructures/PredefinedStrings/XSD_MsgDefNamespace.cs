@@ -242,6 +242,45 @@ namespace cloud.charging.open.protocols.opcp
         #endregion
 
 
+        #region ISO version path segments
+
+        /// <summary>
+        /// Read the generation as the enrollment service writes it in a path.
+        ///
+        /// That service names the same two generations twice over: <c>ISO15118-2</c> and
+        /// <c>ISO15118-20</c> in the path, the namespaces above in the query string beside it.
+        /// Both forms mean the same thing and are read into the same values.
+        /// </summary>
+        /// <param name="Text">A path segment, e.g. "ISO15118-2".</param>
+        public static XSD_MsgDefNamespace? TryParseISOVersion(String Text)
+        {
+
+            var text = Text.Trim();
+
+            if (text.Equals("ISO15118-2",  StringComparison.OrdinalIgnoreCase))
+                return ISO15118_2;
+
+            if (text.Equals("ISO15118-20", StringComparison.OrdinalIgnoreCase))
+                return ISO15118_20;
+
+            // The namespaces themselves are accepted here too: a caller that has one to hand
+            // should not have to translate it before putting it in a path.
+            return TryParse(text);
+
+        }
+
+        /// <summary>
+        /// Write this generation as the enrollment service writes it in a path.
+        /// </summary>
+        public readonly String ToISOVersion()
+
+            => IsISO15118_20
+                   ? "ISO15118-20"
+                   : "ISO15118-2";
+
+        #endregion
+
+
         #region Operator overloading
 
         #region Operator == (XSDMsgDefNamespace1, XSDMsgDefNamespace2)

@@ -361,9 +361,52 @@ namespace cloud.charging.open.protocols.opcp
         /// <summary>
         /// Send one request, with a bearer token when this client has one to offer.
         /// </summary>
+        protected Task<HTTPResponse> Send(HTTPMethod                    HTTPMethod,
+                                          HTTPPath                      Path,
+                                          JObject?                      RequestBody         = null,
+                                          QueryString?                  QueryString         = null,
+                                          Action<HTTPRequest.Builder>?  RequestBuilder      = null,
+                                          EventTracking_Id?             EventTrackingId     = null,
+                                          CancellationToken             CancellationToken   = default)
+
+            => Send(HTTPMethod,
+                    Path,
+                    RequestBody?.ToUTF8Bytes(),
+                    RequestBody is not null
+                        ? HTTPContentType.Application.JSON_UTF8
+                        : null,
+                    null,
+                    QueryString,
+                    RequestBuilder,
+                    EventTrackingId,
+                    CancellationToken);
+
+        #endregion
+
+        #region (protected) Send    (HTTPMethod, Path, Content, ContentType, ...)
+
+        /// <summary>
+        /// Send one request whose body is not JSON.
+        ///
+        /// Enrollment is the part of OPCP that is not a JSON protocol at all: a certificate
+        /// signing request goes up as PKCS#10 and a chain comes back as PKCS#7, both base64.
+        /// Everything else about the request - the bearer token, the retries, the timeouts - is
+        /// the same, so only the body and the two media types differ here.
+        /// </summary>
+        /// <param name="HTTPMethod">The HTTP method.</param>
+        /// <param name="Path">The path of the operation.</param>
+        /// <param name="Content">An optional request body.</param>
+        /// <param name="ContentType">The media type of that body.</param>
+        /// <param name="Accept">What the caller will accept back, or JSON.</param>
+        /// <param name="QueryString">An optional query string.</param>
+        /// <param name="RequestBuilder">An optional delegate to add headers to the request.</param>
+        /// <param name="EventTrackingId">An optional event tracking identification.</param>
+        /// <param name="CancellationToken">An optional token to cancel this request.</param>
         protected async Task<HTTPResponse> Send(HTTPMethod                    HTTPMethod,
                                                 HTTPPath                      Path,
-                                                JObject?                      RequestBody         = null,
+                                                Byte[]?                       Content,
+                                                HTTPContentType?              ContentType,
+                                                AcceptTypes?                  Accept              = null,
                                                 QueryString?                  QueryString         = null,
                                                 Action<HTTPRequest.Builder>?  RequestBuilder      = null,
                                                 EventTracking_Id?             EventTrackingId     = null,
@@ -381,12 +424,10 @@ namespace cloud.charging.open.protocols.opcp
                              HTTPMethod,
                              Path,
                              QueryString,
-                             null,
+                             Accept,
                              authentication,
-                             RequestBody?.ToUTF8Bytes(),
-                             RequestBody is not null
-                                 ? HTTPContentType.Application.JSON_UTF8
-                                 : null,
+                             Content,
+                             ContentType,
                              RequestBuilder:    RequestBuilder,
                              EventTrackingId:   EventTrackingId,
                              CancellationToken: CancellationToken
