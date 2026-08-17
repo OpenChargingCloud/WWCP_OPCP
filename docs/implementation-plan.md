@@ -648,9 +648,14 @@ The Certificate Provisioning Service, the other half of this phase:
 * **Live smoke tests** (`[Category("LiveHubject")]`, `[Explicit]`, credentials from the environment)
   check the one thing an in-process ecosystem cannot: that certificates from somebody else's PKI
   parse here, and that what a real service publishes is a chain that validates. Reads only.
-* **No CI workflow**, matching the sibling WWCP protocol repositories - the plan called it optional
-  and conditional on being wanted. `dotnet test WWCP_OPCP_Tests --filter "TestCategory!=LiveHubject"`
-  is the whole of what one would run.
+* **A CI gate on the same two legs as Hermod and Styx** - windows-latest and a `debian:13` container
+  on an Ubuntu runner - with the same concurrency rules and the same TRX artifacts, so a red night
+  in one of the three repositories is directly comparable with the other two. Two things differ,
+  both because of the submodules: `git` is installed *before* the checkout, since without it
+  `actions/checkout` falls back to a source tarball that has no submodules at all; and the SSH URLs
+  two of them are pinned by are rewritten to HTTPS for the runner rather than in `.gitmodules`, so
+  that a developer's own clone keeps pushing the way it always has. Unlike the Hermod gate, this one
+  pins what it builds against - which is also what makes `SpecificationDriftTests` mean something.
 
 ## 9. Decisions taken (overridable)
 

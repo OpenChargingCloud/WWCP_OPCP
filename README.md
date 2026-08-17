@@ -68,6 +68,10 @@ The `LiveHubject` category is the exception — those tests talk to a real ecosy
 `OPCP_BASE_URL`, `OPCP_CLIENT_ID` and `OPCP_CLIENT_SECRET` from the environment; they are excluded by
 default and marked `[Explicit]` on top of that.
 
+Both of those run on every push and pull request, on Windows and on Debian 13 — the same two legs
+Hermod and Styx are gated on, since everything here is certificates and the two platforms do not
+build and validate chains the same way.
+
 `PlugAndChargeLifecycleTests` is the one to read first. It runs the whole story through all six
 services at once: three roots admitted, a vehicle certificate enrolled through EST and published to
 the PCP, a contract signed by the CPS through both of its paths, a car plugging in at a charging
