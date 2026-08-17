@@ -63,11 +63,14 @@ namespace cloud.charging.open.protocols.opcp.Tests.Infrastructure
         /// <summary>Answers for the certificates the vehicle manufacturers' issuing CA signed.</summary>
         protected OCSPResponder    oemResponder  = null!;
 
-        /// <summary>Serves that responder over HTTP.</summary>
-        protected OCSP_HTTPAPI     ocspAPI       = null!;
+        /// <summary>Where each issuing authority's responder answers, by that authority's fingerprint.</summary>
+        private readonly Dictionary<String, URL> responderURLs = [];
 
         /// <summary>Where the responder answers.</summary>
         protected URL              ocspURL;
+
+        /// <summary>The Provisioning Certificate Pool.</summary>
+        protected PCP_HTTPAPI      pcpAPI        = null!;
 
         #endregion
 
@@ -104,14 +107,59 @@ namespace cloud.charging.open.protocols.opcp.Tests.Infrastructure
             // key pairs, which is cheap once and wasteful per test.
             pki             = new PnCTestPKI();
 
-            oemResponder    = new OCSPResponder(pki.OEMSubCA2);
+            // A responder per issuing authority, as a real PKI has: each answers only for the
+            // certificates it signed, and an asker verifies the answer against that authority.
+            // A single responder for a whole hierarchy cannot work - its signature would be
+            // wrong for every level but one.
+            oemResponder    = MountResponder("oem-sub2", pki.OEMSubCA2);
+                              MountResponder("oem-sub1", pki.OEMSubCA1);
+                              MountResponder("oem-root", pki.OEMRoot);
 
-            ocspAPI         = new OCSP_HTTPAPI(
+            ocspURL         = responderURLs[pki.OEMSubCA2.Certificate.SHA256Fingerprint];
+
+            pcpAPI          = new PCP_HTTPAPI(
                                   httpServer,
-                                  oemResponder
+                                  rcpAPI.Store,
+                                  AccessTokenValidator:  tokenIssuer,
+                                  RevocationCheck:       CheckRevocation
                               );
 
-            ocspURL         = URL.Parse($"{baseURL}/ocsp/");
+        }
+
+        /// <summary>
+        /// Ask the responder of the authority that issued the certificate.
+        /// </summary>
+        private Task<OCSPResult> CheckRevocation(PnCCertificate     Certificate,
+                                                 PnCCertificate     Issuer,
+                                                 CancellationToken  CancellationToken)
+
+            => responderURLs.TryGetValue(Issuer.SHA256Fingerprint, out var url)
+
+                   ? new OCSPClient(url).CheckStatus(Certificate,
+                                                     Issuer,
+                                                     CancellationToken: CancellationToken)
+
+                   // Not knowing is not the same as good.
+                   : Task.FromResult(OCSPResult.Unknown($"No responder is known for '{Issuer.CommonName}'."));
+
+        /// <summary>
+        /// Serve one authority's responder at its own path.
+        /// </summary>
+        private OCSPResponder MountResponder(String             Path,
+                                             IssuedCertificate  Authority)
+        {
+
+            var responder = new OCSPResponder(Authority);
+
+            new OCSP_HTTPAPI(
+                httpServer,
+                responder,
+                HTTPPath.Parse($"/ocsp/{Path}/")
+            );
+
+            responderURLs[Authority.Certificate.SHA256Fingerprint] = URL.Parse($"{baseURL}/ocsp/{Path}/");
+
+            return responder;
 
         }
 
@@ -125,6 +173,25 @@ namespace cloud.charging.open.protocols.opcp.Tests.Infrastructure
             foreach (var rootCertificate in await rcpAPI.Store.GetAll())
                 if (rootCertificate.Id.HasValue)
                     await rcpAPI.Store.Remove(rootCertificate.Id.Value);
+
+            foreach (var pcid in await pcpAPI.Store.GetAll())
+                await pcpAPI.Store.Remove(pcid);
+
+        }
+
+        /// <summary>
+        /// Admit this infrastructure's three roots into the pool.
+        ///
+        /// Not done automatically, because the root certificate pool's own tests count what they
+        /// put there. Anything validating a chain has to call this first - which is honest: a
+        /// chain cannot be validated against trust anchors an ecosystem was never given.
+        /// </summary>
+        protected async Task SeedRootCertificates()
+        {
+
+            await rcpAPI.Store.Add(new RootCertificate(RootCertificateType.OEM, pki.OEMRoot.Certificate));
+            await rcpAPI.Store.Add(new RootCertificate(RootCertificateType.V2G, pki.V2GRoot.Certificate));
+            await rcpAPI.Store.Add(new RootCertificate(RootCertificateType.MO,  pki.MORoot. Certificate));
 
         }
 
@@ -152,6 +219,38 @@ namespace cloud.charging.open.protocols.opcp.Tests.Infrastructure
             => new StaticAccessTokenProvider(
                    tokenIssuer.IssueToken(Roles: Roles).AccessToken
                );
+
+        /// <summary>
+        /// A token provider scoped to particular vehicle manufacturers or e-mobility providers.
+        /// </summary>
+        /// <param name="Roles">The roles the holder acts in.</param>
+        /// <param name="WMIs">The vehicle manufacturers it may act for.</param>
+        /// <param name="ProviderIds">The e-mobility providers it may act for.</param>
+        protected IAccessTokenProvider TokenFor(OPCPRole[]      Roles,
+                                                WMI[]?          WMIs          = null,
+                                                Provider_Id[]?  ProviderIds   = null)
+
+            => new StaticAccessTokenProvider(
+                   tokenIssuer.IssueToken(Roles, WMIs, ProviderIds).AccessToken
+               );
+
+        #endregion
+
+        #region NewPCPClient(Roles, WMIs)
+
+        /// <summary>
+        /// A Provisioning Certificate Pool client acting in the given roles for the given
+        /// vehicle manufacturers.
+        /// </summary>
+        /// <param name="Roles">The roles the client acts in.</param>
+        /// <param name="WMIs">The manufacturers it may act for.</param>
+        protected PCP_HTTPClient NewPCPClient(OPCPRole[]  Roles,
+                                              WMI[]?      WMIs    = null)
+
+            => new (baseURL,
+                    Roles.Length != 0
+                        ? TokenFor(Roles, WMIs)
+                        : null);
 
         #endregion
 

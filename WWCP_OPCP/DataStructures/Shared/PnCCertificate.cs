@@ -361,14 +361,18 @@ namespace cloud.charging.open.protocols.opcp
         /// </summary>
         /// <param name="Bytes">The bytes to render.</param>
         /// <param name="Separator">An optional separator between the octets, e.g. ":".</param>
+        /// <param name="Uppercase">Whether to render the digits uppercase.</param>
         public static String? ToHex(Byte[]?  Bytes,
-                                    String?  Separator   = null)
+                                    String?  Separator   = null,
+                                    Boolean  Uppercase   = false)
         {
 
             if (Bytes is null)
                 return null;
 
-            var hex = Convert.ToHexString(Bytes).ToLowerInvariant();
+            var hex = Uppercase
+                          ? Convert.ToHexString(Bytes)
+                          : Convert.ToHexString(Bytes).ToLowerInvariant();
 
             if (Separator.IsNullOrEmpty())
                 return hex;

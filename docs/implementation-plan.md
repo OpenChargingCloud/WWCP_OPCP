@@ -451,6 +451,31 @@ clamped to its issuer's validity (asking for a thirty-year leaf under a ten-year
 ten-year leaf), and certificates are issued starting slightly in the past, so that a verifier whose
 clock runs behind does not reject one that was just issued.
 
+**Phase 4 — done.** The Provisioning Certificate Pool, both ends, with the validation the
+specification prescribes.
+
+* **The request says nothing about which vehicle.** The PUT body has no PCID field, because in
+  ISO 15118 the PCID *is* the common name of the provisioning certificate. The pool reads it from the
+  certificate rather than being told it, so the two can never disagree.
+* **The four checks run in a different order than the specification lists them**, deliberately: the
+  chain is validated first, then revocation along the path it established. This costs nothing and
+  gains two things — a certificate that chains nowhere is refused for *that* rather than for an
+  unanswerable revocation question, and each certificate can be asked about at its actual issuer,
+  which is how RFC 6960 identifies one and impossible to get right before the path is known.
+* **Not knowing is not the same as good.** A revocation check that could not be made refuses the
+  publication rather than waving it through.
+* Revocation is re-checked when a certificate is *handed out*, not only when it is published: an
+  operator about to write a contract must not be given a certificate that stopped being usable in
+  between.
+* The delete and key-change cascades are internal events (`OnProvisioningCertificateDeleted`,
+  `OnVehicleKeyChanged`) that phase 5's contract certificate pool will subscribe to.
+* **The trust anchor does not travel.** The pool publishes what it worked out about the root — its
+  distinguished name, serial and key identifier — and not the root itself, because the recipient is
+  supposed to already have that from the root certificate pool. So those fields are derived
+  server-side and read as plain values client-side.
+* A test ecosystem needs **one OCSP responder per issuing authority**, not one per hierarchy: a
+  responder signs as the CA it answers for, and an asker verifies against that CA.
+
 ## 9. Decisions taken (overridable)
 
 1. **Namespace `cloud.charging.open.protocols.opcp`** (lowercase protocol segment, PascalCase sub-namespaces) without version suffix (single major version; split later if v2 breaks).
