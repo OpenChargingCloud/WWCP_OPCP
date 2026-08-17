@@ -75,6 +75,9 @@ namespace cloud.charging.open.protocols.opcp.Tests.Infrastructure
         /// <summary>The Contract Certificate Pool.</summary>
         protected CCP_HTTPAPI      ccpAPI        = null!;
 
+        /// <summary>The Certificate Provisioning Service.</summary>
+        protected CPS_HTTPAPI      cpsAPI        = null!;
+
         /// <summary>The certificate the contract provisioning service signs with.</summary>
         protected IssuedCertificate  cpsSigner   = null!;
 
@@ -140,6 +143,20 @@ namespace cloud.charging.open.protocols.opcp.Tests.Infrastructure
             ccpAPI.AttachTo(pcpAPI);
 
             cpsSigner       = pki.IssueCPSSigningCertificate();
+
+            // The service that signs contracts reaches all three pools: it reads vehicles from
+            // one, checks the operator's chain against the anchors in another, and files what it
+            // signed in the third. In one process those are the stores themselves; apart, they
+            // would be clients behind the same interfaces.
+            cpsAPI          = new CPS_HTTPAPI(
+                                  httpServer,
+                                  new InMemoryCpsSignerStore(cpsSigner),
+                                  ContractCertificatePool:    ccpAPI.Store,
+                                  Vehicles:                   pcpAPI.Store,
+                                  ContractCertificateIssuer:  CPS_HTTPAPI.IssuedBy(pki.V2GMOSubCA2),
+                                  RootCertificates:           rcpAPI.Store,
+                                  AccessTokenValidator:       tokenIssuer
+                              );
 
         }
 

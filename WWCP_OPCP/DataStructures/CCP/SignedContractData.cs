@@ -252,7 +252,10 @@ namespace cloud.charging.open.protocols.opcp
                                          pcid. Value,
                                          signed,
                                          XSDMsgDefNamespace,
-                                         JSON.Value<String>("metadata"),
+                                         // This document spells it 'metadata' here and 'metaData'
+                                         // elsewhere, and the provisioning service's document
+                                         // spells it 'metaData' throughout. Both are read.
+                                         JSON.Value<String>("metadata") ?? JSON.Value<String>("metaData"),
                                          JSON.Value<String>("cpsV2GRootCertificateFingerprint")
                                      );
 

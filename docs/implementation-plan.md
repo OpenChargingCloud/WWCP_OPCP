@@ -476,7 +476,8 @@ specification prescribes.
 * A test ecosystem needs **one OCSP responder per issuing authority**, not one per hierarchy: a
   responder signs as the CA it answers for, and an asker verifies against that CA.
 
-**Phase 5 — the Contract Certificate Pool is done; the Certificate Provisioning Service remains.**
+**Phase 5 — done: contract data, the Contract Certificate Pool and the Certificate Provisioning
+Service.**
 
 * `ContractData` reads and writes both shapes the specification carries: the current flat one and
   the nested `contractSignatureCertChain` the two deprecated operations still take.
@@ -504,8 +505,47 @@ specification prescribes.
   put two different parameter names at one segment. They share one name internally and each handler
   reads it as what its own operation means; the wire paths are unchanged.
 
-Still open: the Certificate Provisioning Service - five operations, of which two are deprecated and
-one issues the contract certificate itself through a V2G mobility-operator CA.
+The Certificate Provisioning Service, the other half of this phase:
+
+* **Signing joined the seam.** `IContractDataCodec.SignContractData` is the one method on it that
+  produces an ISO 15118 structure rather than reading one, and it is the reason the pool accepts
+  anything at all - the pool takes contract data only from a signer it trusts, and a vehicle
+  verifies that same signature before installing the contract.
+* **One request type for the current operation and both deprecated ones.** They carry the same
+  fields and differ in which they insist on and in whether the contract data is nested; each
+  handler enforces its own requirements. The PCID decides what *happens* to the result rather than
+  what it looks like: with one, the signed contract is also filed in the contract certificate pool;
+  without one, the operator files it itself.
+* **`generate` is the only place where all three pools meet.** The vehicle comes from the
+  provisioning certificate pool, the contract certificate is issued under the V2G mobility operator
+  authority, its private key is wrapped against the key in the car's own certificate, the signature
+  is anchored in a root from the root certificate pool, and the result goes into the contract
+  certificate pool - from where that car collects it the next time it plugs in.
+* **The certificate factory takes a lifetime, not a window.** A generated contract certificate
+  therefore expires with the contract but *starts* at issuance rather than at `contractBegins`, and
+  both boundaries are shifted by the local UTC offset because Hermod's factory converts an already
+  UTC timestamp as if it were local. `ContractCertificateIssuerDelegate` is the seam for a
+  deployment that has to honour an exact window - which is what one signing in an HSM would supply
+  anyway; `CPS_HTTPAPI.IssuedBy(ca)` is the default for everyone else.
+* **The service checks the chain it is asked to sign**, against MO and V2G anchors from the root
+  certificate pool, when it is given one. Optional in the same sense as the provisioning pool's
+  revocation check: an escape hatch for a development ecosystem and a hole anywhere else, because a
+  signature from this service is the whole reason a contract is later believed.
+* **`GET /cps/signer` really is un-prefixed** where everything else is under `/v1/cps`. Since routes
+  are relative to a mount and cannot reach above it, the discovery gets a second mount of its own -
+  and is served at `/v1/cps/signer` too, because a caller that assumes the prefix is not wrong.
+* The published signer description **has nowhere to put a private key**, which is why the store
+  holds `IssuedCertificate` and the wire type is derived from it on the way out. Its schema and its
+  own example disagree about three field names (`cpsRootCertificateId`, `cpsCa1Certificate`,
+  `cpsCa2Certificate` against `cpsV2GRootCertificateFingerprint`, `cpsSubCa1Certificate`,
+  `cpsSubCa2Certificate`); all six are read, the schema's three are written.
+* **Naming a root the service cannot sign under is refused rather than quietly answered**: an
+  operator that names one is saying which of its cars have to be able to verify the result, and
+  signing under another root would produce contract data those cars reject.
+* The rights matrix is enforced where the interface document is silent: `contractData/signed`
+  declares no security at all, and the matrix beside it gives it to operators with their own PKI.
+  The two paths stay separate - an operator without a PKI of its own cannot use the signing path,
+  and one with a PKI cannot use the generating path.
 
 ## 9. Decisions taken (overridable)
 

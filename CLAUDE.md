@@ -50,7 +50,10 @@ two projects compile clean, and `WWCP_OPCP_Tests` builds with `TreatWarningsAsEr
 - **Reuse Hermod's PKI** (`libs/Hermod/Hermod/PKI/PKIFactory.cs`): key generation, CA issuance, CSR
   *signing*, chain validation, PEM export. It cannot create CSRs, speak PKCS#7 or OCSP — those are
   ours to write, in `WWCP_OPCP/PKI/`. Its `SubjectName` parameter is a bare common name, not a
-  distinguished name: the factory builds `CN={SubjectName}` itself.
+  distinguished name: the factory builds `CN={SubjectName}` itself. It takes a *lifetime*, never a
+  validity window, clamps a certificate to its issuer's `NotAfter`, and shifts both boundaries back
+  by the local UTC offset (it converts an already-UTC `Timestamp.Now` as if it were local). Assert
+  validity dates to the day, not to the second.
 
 ## Hermod HTTP, as it actually behaves
 

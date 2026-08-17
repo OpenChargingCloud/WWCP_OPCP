@@ -19,6 +19,8 @@
 
 using System.Diagnostics.CodeAnalysis;
 
+using Org.BouncyCastle.Crypto;
+
 #endregion
 
 namespace cloud.charging.open.protocols.opcp
@@ -77,6 +79,25 @@ namespace cloud.charging.open.protocols.opcp
         Boolean TryDecodeInstallationRequest(Byte[]                                                Request,
                                              [NotNullWhen(true)]  out CertificateInstallationRequest?  Decoded,
                                              [NotNullWhen(false)] out String?                      ErrorResponse);
+
+        /// <summary>
+        /// Sign contract data, as a contract provisioning service does.
+        ///
+        /// This is the one thing on this seam that produces an ISO 15118 structure rather than
+        /// reading one, and it is the reason the contract certificate pool accepts anything at
+        /// all: the pool takes contract data only from a signer it trusts, and a vehicle verifies
+        /// that same signature before it installs the contract.
+        /// </summary>
+        /// <param name="ContractData">The contract certificate, its chain, and the wrapped key.</param>
+        /// <param name="EMAId">The contract.</param>
+        /// <param name="PCID">The vehicle it is for, when the operator named one.</param>
+        /// <param name="SignerCertificate">The certificate the signature is made under.</param>
+        /// <param name="SigningKey">The key to sign with.</param>
+        Byte[] SignContractData(ContractData            ContractData,
+                                EMA_Id                  EMAId,
+                                PCID?                   PCID,
+                                PnCCertificate          SignerCertificate,
+                                AsymmetricKeyParameter  SigningKey);
 
         /// <summary>
         /// Turn what the contract provisioning service signed into what goes back to the vehicle.

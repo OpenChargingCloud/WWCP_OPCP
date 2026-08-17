@@ -190,6 +190,35 @@ namespace cloud.charging.open.protocols.opcp
 
         #endregion
 
+        #region (seam) SignContractData(ContractData, EMAId, PCID, SignerCertificate, SigningKey)
+
+        /// <summary>
+        /// Sign contract data, as a contract provisioning service does.
+        /// </summary>
+        /// <param name="ContractData">What is being signed.</param>
+        /// <param name="EMAId">The contract.</param>
+        /// <param name="PCID">The vehicle it is for, when it is known.</param>
+        /// <param name="SignerCertificate">The certificate the signature is made under.</param>
+        /// <param name="SigningKey">The key to sign with.</param>
+        /// <remarks>
+        /// Explicitly implemented, because a type cannot carry a static and an instance method of
+        /// the same signature - and the static one above is what a test ecosystem calls directly,
+        /// without going through the seam.
+        /// </remarks>
+        Byte[] IContractDataCodec.SignContractData(ContractData            ContractData,
+                                                   EMA_Id                  EMAId,
+                                                   PCID?                   PCID,
+                                                   PnCCertificate          SignerCertificate,
+                                                   AsymmetricKeyParameter  SigningKey)
+
+            => TestContractDataCodec.SignContractData(ContractData,
+                                                      EMAId,
+                                                      PCID,
+                                                      SignerCertificate,
+                                                      SigningKey);
+
+        #endregion
+
         #region VerifySignedContractData(SignedContractData, out SignerCertificate, out ErrorResponse)
 
         /// <summary>
