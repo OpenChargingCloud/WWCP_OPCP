@@ -476,6 +476,37 @@ specification prescribes.
 * A test ecosystem needs **one OCSP responder per issuing authority**, not one per hierarchy: a
   responder signs as the CA it answers for, and an asker verifies against that CA.
 
+**Phase 5 — the Contract Certificate Pool is done; the Certificate Provisioning Service remains.**
+
+* `ContractData` reads and writes both shapes the specification carries: the current flat one and
+  the nested `contractSignatureCertChain` the two deprecated operations still take.
+* `ContractKeyCrypto` wraps a contract's private key against the vehicle's provisioning certificate
+  by ephemeral ECDH, so the key crosses a charging station that cannot read it. **The shape is
+  ISO 15118's — ephemeral ECDH, AES-128-CBC, a 16-byte IV in front — and the derivation of the
+  session key from the agreed secret is this library's own.** Nothing in OPCP looks inside these
+  bytes, so nothing here needs ISO's; a real vehicle does, and it arrives with the codec.
+* **`IContractDataCodec` is the seam.** OPCP moves three ISO 15118 structures it never opens - the
+  request a car makes, the response that goes back, and the signed contract data in between.
+  `TestContractDataCodec` implements the seam with a container that is cryptographically real
+  (genuine ECDSA, verified) and deliberately not the ISO wire format; every structure it makes says
+  so in a `_format` property. Implementing this interface over WWCP_ISO15118 is the whole of what
+  real EXI support would require.
+* The **polymorphic 404** works as the specification intends: no contract yields HTTP 404 whose body
+  is nevertheless a valid ISO response, because the charging station relaying it speaks ISO 15118
+  and not HTTP. `alwaysReturnEXI: false` gets the plain refusal instead.
+* **Default-contract rules**: the first contract filed for a vehicle is its default; deleting the
+  default promotes nothing and raises `OnDefaultContractLost`, because choosing what a car charges
+  under is not the pool's decision.
+* The phase 4 cascades have their receiver: `CCP_HTTPAPI.AttachTo(pcp)` drops a vehicle's contracts
+  when its provisioning certificate is depublished or its key changes.
+* **The specification's CCP paths are ambiguous as a route tree**: `signedContractData/{emaid}`
+  (DELETE), `signedContractData/{pcid}` (GET) and `signedContractData/{pcid}/{emaid}/default` (POST)
+  put two different parameter names at one segment. They share one name internally and each handler
+  reads it as what its own operation means; the wire paths are unchanged.
+
+Still open: the Certificate Provisioning Service - five operations, of which two are deprecated and
+one issues the contract certificate itself through a V2G mobility-operator CA.
+
 ## 9. Decisions taken (overridable)
 
 1. **Namespace `cloud.charging.open.protocols.opcp`** (lowercase protocol segment, PascalCase sub-namespaces) without version suffix (single major version; split later if v2 breaks).

@@ -72,6 +72,12 @@ namespace cloud.charging.open.protocols.opcp.Tests.Infrastructure
         /// <summary>The Provisioning Certificate Pool.</summary>
         protected PCP_HTTPAPI      pcpAPI        = null!;
 
+        /// <summary>The Contract Certificate Pool.</summary>
+        protected CCP_HTTPAPI      ccpAPI        = null!;
+
+        /// <summary>The certificate the contract provisioning service signs with.</summary>
+        protected IssuedCertificate  cpsSigner   = null!;
+
         #endregion
 
         #region Setup / teardown
@@ -124,6 +130,17 @@ namespace cloud.charging.open.protocols.opcp.Tests.Infrastructure
                                   RevocationCheck:       CheckRevocation
                               );
 
+            ccpAPI          = new CCP_HTTPAPI(
+                                  httpServer,
+                                  AccessTokenValidator: tokenIssuer
+                              );
+
+            // The contract pool follows what happens to vehicles: a car whose provisioning
+            // certificate is gone, or whose key changed, cannot use its contracts any more.
+            ccpAPI.AttachTo(pcpAPI);
+
+            cpsSigner       = pki.IssueCPSSigningCertificate();
+
         }
 
         /// <summary>
@@ -175,7 +192,72 @@ namespace cloud.charging.open.protocols.opcp.Tests.Infrastructure
                     await rcpAPI.Store.Remove(rootCertificate.Id.Value);
 
             foreach (var pcid in await pcpAPI.Store.GetAll())
+            {
+                await ccpAPI.Store.RemoveByVehicle(pcid);
                 await pcpAPI.Store.Remove(pcid);
+            }
+
+            foreach (var emaId in contractsIssued)
+                await ccpAPI.Store.Remove(emaId);
+
+            contractsIssued.Clear();
+
+        }
+
+        private readonly List<EMA_Id> contractsIssued = [];
+
+        #endregion
+
+        #region NewContract(EMAId, PCID, OwnPKI = false)
+
+        /// <summary>
+        /// Mint a contract for a vehicle, exactly as a contract provisioning service would: a
+        /// contract certificate, its private key wrapped so that only this vehicle can unwrap it,
+        /// and the whole thing signed by the provisioning service.
+        /// </summary>
+        /// <param name="EMAId">The contract.</param>
+        /// <param name="Vehicle">The vehicle's own certificate and key.</param>
+        /// <param name="OwnPKI">Whether the operator brings its own PKI.</param>
+        protected SignedContractData NewContract(EMA_Id             EMAId,
+                                                 IssuedCertificate  Vehicle,
+                                                 Boolean            OwnPKI   = false)
+        {
+
+            var contract  = pki.IssueContractCertificate(EMAId, OwnPKI);
+
+            var wrapped   = ContractKeyCrypto.Wrap(contract.PrivateKey,
+                                                   Vehicle.Certificate);
+
+            var subCAs    = contract.SubCAs.ToArray();
+
+            var data      = new ContractData(
+                                contract.Certificate,
+                                subCAs[^1],
+                                wrapped.EncryptedPrivateKey,
+                                wrapped.DHPublicKey,
+                                subCAs.Length > 1 ? subCAs[0] : null,
+                                EMAId
+                            );
+
+            var pcid      = PCID.Parse(Vehicle.Certificate.CommonName);
+
+            var signed    = new SignedContractData(
+                                EMAId,
+                                pcid,
+                                TestContractDataCodec.SignContractData(
+                                    data,
+                                    EMAId,
+                                    pcid,
+                                    cpsSigner.Certificate,
+                                    cpsSigner.PrivateKey
+                                ),
+                                XSD_MsgDefNamespace.ISO15118_2,
+                                CpsV2GRootCertificateFingerprint: pki.V2GRoot.Certificate.SHA256Fingerprint
+                            );
+
+            contractsIssued.Add(EMAId);
+
+            return signed;
 
         }
 
