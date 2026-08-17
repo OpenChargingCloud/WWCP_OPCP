@@ -81,6 +81,9 @@ namespace cloud.charging.open.protocols.opcp.Tests.Infrastructure
         /// <summary>The V2G PKI's enrollment service.</summary>
         protected EST_HTTPAPI      estAPI        = null!;
 
+        /// <summary>The webhook service.</summary>
+        protected Webhook_HTTPAPI  webhookAPI    = null!;
+
         /// <summary>The certificate the contract provisioning service signs with.</summary>
         protected IssuedCertificate  cpsSigner   = null!;
 
@@ -184,6 +187,28 @@ namespace cloud.charging.open.protocols.opcp.Tests.Infrastructure
 
             #endregion
 
+            #region The webhook service, listening to all three pools
+
+            webhookAPI      = new Webhook_HTTPAPI(
+                                  httpServer,
+                                  new WebhookDeliveryService(
+                                      // Three tries a few milliseconds apart rather than the
+                                      // specification's hourly ones: what is being exercised is
+                                      // that a retry happens, not how long a partner's backend
+                                      // gets to recover.
+                                      MaximumAttempts:  3,
+                                      RetryInterval:    TimeSpan.FromMilliseconds(20),
+                                      RequestTimeout:   TimeSpan.FromSeconds(5)
+                                  ),
+                                  AccessTokenValidator: tokenIssuer
+                              );
+
+            webhookAPI.AttachTo(rcpAPI);
+            webhookAPI.AttachTo(pcpAPI);
+            webhookAPI.AttachTo(ccpAPI);
+
+            #endregion
+
         }
 
         /// <summary>
@@ -244,6 +269,10 @@ namespace cloud.charging.open.protocols.opcp.Tests.Infrastructure
                 await ccpAPI.Store.Remove(emaId);
 
             contractsIssued.Clear();
+
+            // An endpoint left behind by one test would be sent the events of the next one.
+            foreach (var endpoint in await webhookAPI.Endpoints.GetAll())
+                await webhookAPI.Endpoints.Remove(endpoint.Id);
 
         }
 

@@ -71,6 +71,26 @@ namespace cloud.charging.open.protocols.opcp
         /// </summary>
         public event Func<PCID, EMA_Id, Task>?  OnDefaultContractLost;
 
+        /// <summary>
+        /// A contract was filed, and whether it took the place of one already there.
+        ///
+        /// The webhook service listens for this: a vehicle manufacturer's backend acts on a
+        /// contract appearing for one of its cars.
+        /// </summary>
+        public event Func<SignedContractData, Boolean, Task>?  OnContractStored;
+
+        /// <summary>
+        /// A contract was deleted.
+        /// </summary>
+        public event Func<SignedContractData, Task>?           OnContractRemoved;
+
+        /// <summary>
+        /// A contract actually reached a car - installed through a charging station, or collected
+        /// by a manufacturer's backend. The end of the whole story, and the one event that says
+        /// the contract is in use rather than merely on file.
+        /// </summary>
+        public event Func<SignedContractData, Task>?           OnContractDelivered;
+
         #endregion
 
         #region Constructor(s)
@@ -217,6 +237,11 @@ namespace cloud.charging.open.protocols.opcp
                     if (!Codec.TryEncodeInstallationResponse(chosen.SignedContractDataXML, out var installationResponse, out var encodeError))
                         return Refuse(request, HTTPStatusCode.InternalServerError, encodeError);
 
+                    // The end of the whole story: a contract left the pool for the car it was
+                    // written for.
+                    if (OnContractDelivered is not null)
+                        await OnContractDelivered.Invoke(chosen);
+
                     return Respond(request,
                                    HTTPStatusCode.OK,
                                    WrapInstallation(installationResponse, chosen));
@@ -251,7 +276,12 @@ namespace cloud.charging.open.protocols.opcp
                     if (!Codec.TryReadSignedContractData(contractData.SignedContractDataXML, out var inner, out var readError))
                         return Refuse(request, HTTPStatusCode.BadRequest, readError);
 
-                    var stored = await Store.Add(contractData.With(ContractCertificate: inner.ContractCertificate));
+                    var replaced = await Store.Get(contractData.EMAId) is not null;
+
+                    var stored   = await Store.Add(contractData.With(ContractCertificate: inner.ContractCertificate));
+
+                    if (OnContractStored is not null)
+                        await OnContractStored.Invoke(stored, replaced);
 
                     return Respond(request, HTTPStatusCode.Created, stored.ToContractInfo());
 
@@ -294,6 +324,9 @@ namespace cloud.charging.open.protocols.opcp
                         return Refuse(request,
                                       HTTPStatusCode.NotFound,
                                       "The contract for the given EMAID not found.");
+
+                    if (OnContractRemoved is not null)
+                        await OnContractRemoved.Invoke(removed);
 
                     // Deleting the default leaves the vehicle without one, on purpose.
                     if (removed.IsDefault && OnDefaultContractLost is not null)

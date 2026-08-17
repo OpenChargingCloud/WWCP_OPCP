@@ -589,6 +589,42 @@ The Certificate Provisioning Service, the other half of this phase:
 * The media type carries `smime-type=certs-only` as RFC 7030 spells it, written as a header rather
   than through `HTTPContentType`, which models only a charset parameter.
 
+**Phase 7 — done: the webhook service, and the news the rest of the ecosystem now carries.**
+
+* **Sixteen events, because the specification names them in three places and never the same list
+  twice.** The management interface enumerates fourteen; the narrative documentation adds
+  `root.cert.revoked` and `mo.prov.cert.factory.reset`; the payload document carries the second of
+  those while omitting the `mo.prov.cert.updated.factory.reset` the other two list - and which the
+  documentation marks deprecated in the same table. All sixteen are registered, and an event that
+  arrives after this library was written registers itself.
+* **The scoping fields are the security model.** An endpoint's `providerIds` and `wmis` come from
+  the token that registered it, never from the registration, and the delivery service holds to them
+  - otherwise a subscription would be a way of watching somebody else's cars. Reading somebody
+  else's endpoint answers 404 rather than 403: which identifications exist is not something to be
+  learned by asking for them one at a time.
+* **The signature is over the raw body**, HMAC-SHA256 as lowercase hexadecimal, compared in
+  constant time as the documentation asks. It goes out under both names the specification requires
+  - `X-Hubject-Signature: sha256=…` and the bare `payload-signature` - and the receiver reads all
+  three, including the `X-Operator-Signature` that the same documentation's validation section and
+  both of its worked code examples use.
+* **A receiver that has no secret refuses everything**, and checks the signature before it parses
+  the body. An unsigned delivery is not a malformed event; it is an event from somebody who cannot
+  prove they are the ecosystem.
+* **Retry on the partner's failure, not on the partner's refusal.** A 5xx means the partner meant
+  to take it and could not, so it is tried again - three times an hour apart, per the
+  documentation. A 4xx means it looked at it and said no.
+* **Delivery is fire-and-forget from the ecosystem's own operations.** An HTTP request that deleted
+  a certificate must not still be open when the last partner finally answers, so the pools raise
+  events and return. The in-flight count is raised *before* the background task starts, so anything
+  that returns after raising an event can rely on `WhenIdle` actually waiting for the delivery.
+* **The pools grew the events they were missing**: the root pool now says when an anchor arrives or
+  leaves, and the contract pool when a contract is filed, replaced, deleted, or finally collected by
+  the car it was written for. A root that leaves while still valid was withdrawn; one that leaves
+  expired simply ran out - the pool has one operation and the specification has two words for it.
+* **`WebhookReceiver_HTTPAPI` is part of the library, not the tests.** A partner should not have to
+  work the signature check out from a Go snippet and a Java snippet that disagree about which header
+  to read.
+
 ## 9. Decisions taken (overridable)
 
 1. **Namespace `cloud.charging.open.protocols.opcp`** (lowercase protocol segment, PascalCase sub-namespaces) without version suffix (single major version; split later if v2 breaks).

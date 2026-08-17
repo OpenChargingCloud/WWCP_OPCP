@@ -60,6 +60,23 @@ namespace cloud.charging.open.protocols.opcp
 
         #endregion
 
+        #region Events
+
+        /// <summary>
+        /// A root was admitted to the pool.
+        ///
+        /// The webhook service listens for this: a charge point operator has to learn that a new
+        /// anchor exists before the certificates under it start arriving at its stations.
+        /// </summary>
+        public event Func<RootCertificate, Task>?  OnRootCertificateAdded;
+
+        /// <summary>
+        /// A root left the pool - because it expired, or because it was withdrawn.
+        /// </summary>
+        public event Func<RootCertificate, Task>?  OnRootCertificateRemoved;
+
+        #endregion
+
         #region Constructor(s)
 
         /// <summary>
@@ -165,6 +182,9 @@ namespace cloud.charging.open.protocols.opcp
                     // and contracts must not be cascade-deleted automatically.
                     var removed = await Store.Remove(rootCertificateId);
 
+                    if (removed is not null && OnRootCertificateRemoved is not null)
+                        await OnRootCertificateRemoved.Invoke(removed);
+
                     return removed is null
 
                                ? Refuse(request,
@@ -267,6 +287,9 @@ namespace cloud.charging.open.protocols.opcp
                                          addRequest.Certificate
                                      )
                                  );
+
+                    if (OnRootCertificateAdded is not null)
+                        await OnRootCertificateAdded.Invoke(stored);
 
                     // The specification documents no body here. Returning the stored entry is
                     // the only way a caller learns the identification it was given without
