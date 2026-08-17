@@ -140,11 +140,29 @@ namespace cloud.charging.open.protocols.opcp
         public void AttachTo(PCP_HTTPAPI ProvisioningCertificatePool)
         {
 
-            ProvisioningCertificatePool.OnProvisioningCertificateDeleted += async (pcid, certificate)
-                => await Store.RemoveByVehicle(pcid);
+            ProvisioningCertificatePool.OnProvisioningCertificateDeleted += (pcid, certificate)
+                => DropContractsOf(pcid);
 
-            ProvisioningCertificatePool.OnVehicleKeyChanged              += async (pcid, certificate)
-                => await Store.RemoveByVehicle(pcid);
+            ProvisioningCertificatePool.OnVehicleKeyChanged              += (pcid, certificate)
+                => DropContractsOf(pcid);
+
+        }
+
+        /// <summary>
+        /// Take every contract of one vehicle out of the pool, and say so.
+        /// </summary>
+        /// <param name="PCID">A vehicle.</param>
+        /// <remarks>
+        /// Each one is announced individually rather than the cascade being announced as a whole:
+        /// a mobility operator that had written one of these contracts needs to hear about that
+        /// contract, not about a vehicle it may know nothing else about.
+        /// </remarks>
+        private async Task DropContractsOf(PCID PCID)
+        {
+
+            foreach (var contract in await Store.RemoveByVehicle(PCID))
+                if (OnContractRemoved is not null)
+                    await OnContractRemoved.Invoke(contract);
 
         }
 

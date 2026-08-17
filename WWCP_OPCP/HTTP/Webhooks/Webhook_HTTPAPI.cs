@@ -149,6 +149,36 @@ namespace cloud.charging.open.protocols.opcp
         }
 
         /// <summary>
+        /// Follow what a Certificate Provisioning Service files.
+        /// </summary>
+        /// <param name="CertificateProvisioningService">The service to follow.</param>
+        /// <remarks>
+        /// A contract signed by that service goes straight into the pool without passing through
+        /// the pool's own interface, so the pool never sees it arrive. It is news to a vehicle
+        /// manufacturer's backend all the same.
+        /// </remarks>
+        public void AttachTo(CPS_HTTPAPI CertificateProvisioningService)
+        {
+
+            CertificateProvisioningService.OnContractStored += (contract, replaced) => {
+                Delivery.PublishInBackground(
+                    WebhookEvent.ForContract(
+                        replaced
+                            ? WebhookEventType.ContractUpdated
+                            : WebhookEventType.ContractCreated,
+                        contract.EMAId,
+                        contract.PCID,
+                        contract.ContractCertificate,
+                        contract.CpsV2GRootCertificateFingerprint,
+                        XSDMsgDefNamespace: contract.XSDMsgDefNamespace
+                    )
+                );
+                return Task.CompletedTask;
+            };
+
+        }
+
+        /// <summary>
         /// Follow what happens in a Contract Certificate Pool.
         /// </summary>
         /// <param name="ContractCertificatePool">The pool to follow.</param>

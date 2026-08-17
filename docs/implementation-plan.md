@@ -625,6 +625,33 @@ The Certificate Provisioning Service, the other half of this phase:
   work the signature check out from a Go snippet and a Java snippet that disagree about which header
   to read.
 
+**Phase 8 — done: the whole story in one test, and what a log file is allowed to contain.**
+
+* **`PlugAndChargeLifecycleTests` runs the lifecycle through all six services at once**, which is
+  the only thing that tests they are the same ecosystem: three roots admitted, a vehicle certificate
+  enrolled through EST and published to the PCP, both of the provisioning service's paths, a car
+  plugging in, the manufacturer collecting the same contract and decrypting its private key with the
+  key generated before any of it started, a default-contract switch, and a car that is sold - with a
+  partner backend having heard and verified every step.
+* **It found the gap the per-service tests could not.** The provisioning service files contracts
+  straight into the pool's store rather than through the pool's own interface, so nothing announced
+  them: `oem.contract.created` never fired for the path that produces most contracts. The service
+  now announces what it filed, and the pool announces each contract it drops when a vehicle is
+  depublished - a mobility operator needs to hear about *its contract*, not about a vehicle it may
+  know nothing else about.
+* **One `OPCPClientLogger` for all six services**, rather than six near-identical logger classes:
+  they differ in their paths and payloads and in nothing a log line cares about. What it leaves out
+  is the point - every request carries a bearer token, the token endpoint's traffic carries the
+  credential that mints them, and a webhook registration answers with a signing secret. Each of
+  those in a log file is a whole credential, so they are elided by name before anything is written
+  and bodies stay out unless a deployment asks for them.
+* **Live smoke tests** (`[Category("LiveHubject")]`, `[Explicit]`, credentials from the environment)
+  check the one thing an in-process ecosystem cannot: that certificates from somebody else's PKI
+  parse here, and that what a real service publishes is a chain that validates. Reads only.
+* **No CI workflow**, matching the sibling WWCP protocol repositories - the plan called it optional
+  and conditional on being wanted. `dotnet test WWCP_OPCP_Tests --filter "TestCategory!=LiveHubject"`
+  is the whole of what one would run.
+
 ## 9. Decisions taken (overridable)
 
 1. **Namespace `cloud.charging.open.protocols.opcp`** (lowercase protocol segment, PascalCase sub-namespaces) without version suffix (single major version; split later if v2 breaks).

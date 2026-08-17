@@ -64,8 +64,43 @@ dotnet test WWCP_OPCP_Tests --filter "TestCategory!=LiveHubject"
 ```
 
 The suite is self-contained: loopback HTTP on ephemeral ports, a PKI minted per fixture, no network.
-The `LiveHubject` category is the exception — those tests talk to a real ecosystem and read their
-credentials from `OPCP_CLIENT_ID` / `OPCP_CLIENT_SECRET`; they are excluded by default.
+The `LiveHubject` category is the exception — those tests talk to a real ecosystem and read
+`OPCP_BASE_URL`, `OPCP_CLIENT_ID` and `OPCP_CLIENT_SECRET` from the environment; they are excluded by
+default and marked `[Explicit]` on top of that.
+
+`PlugAndChargeLifecycleTests` is the one to read first. It runs the whole story through all six
+services at once: three roots admitted, a vehicle certificate enrolled through EST and published to
+the PCP, a contract signed by the CPS through both of its paths, a car plugging in at a charging
+station, the manufacturer collecting the same contract and **decrypting its private key with the key
+it generated before any of it started**, a default-contract switch, and finally a car that is sold —
+taking its contracts with it, with a partner backend having heard and HMAC-verified every step.
+
+
+### Using it
+
+Talking to an ecosystem:
+
+```csharp
+var config  = new OPCPEndpointConfig(URL.Parse("https://open.plugncharge-test.hubject.com"));
+var tokens  = AccessTokenClient.CreateTokenProvider(config, clientId, clientSecret);
+
+var roots   = await new RCP_HTTPClient(config, tokens).GetAllRootCerts(RootCertificateType.V2G);
+```
+
+Running one — each service is a Hermod `HTTPAPI` on a shared server, at its own mount path:
+
+```csharp
+var server  = await HTTPServer.StartNew(IPPort.Parse(8080));
+
+var rcp     = new RCP_HTTPAPI(server, AccessTokenValidator: validator);
+var pcp     = new PCP_HTTPAPI(server, rcp.Store, AccessTokenValidator: validator);
+var ccp     = new CCP_HTTPAPI(server, AccessTokenValidator: validator);
+
+ccp.AttachTo(pcp);   // a vehicle that loses its certificate loses its contracts
+```
+
+An `OPCPClientLogger` can be attached to any client. It elides bearer tokens, signing secrets and
+the OAuth2 client secret before anything is written, and leaves bodies out entirely unless asked.
 
 
 ### Scope

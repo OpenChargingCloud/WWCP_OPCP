@@ -123,6 +123,20 @@ namespace cloud.charging.open.protocols.opcp
 
         #endregion
 
+        #region Events
+
+        /// <summary>
+        /// A contract was filed in the contract certificate pool, and whether it took the place
+        /// of one already there.
+        ///
+        /// The pool announces what is PUT into it; this announces what this service put there
+        /// directly. A contract is news to a vehicle manufacturer's backend whichever door it
+        /// came through.
+        /// </summary>
+        public event Func<SignedContractData, Boolean, Task>?  OnContractStored;
+
+        #endregion
+
         #region Constructor(s)
 
         /// <summary>
@@ -750,17 +764,20 @@ namespace cloud.charging.open.protocols.opcp
                 return (HTTPStatusCode.BadRequest,
                         "Invalid Tupple - EMAID is already used by other PCID.");
 
-            await ContractCertificatePool.Add(
-                      new SignedContractData(
-                          EMAId,
-                          PCID,
-                          SignedData,
-                          XSDMsgDefNamespace,
-                          Metadata,
-                          Signer.Root.Certificate.SHA256Fingerprint,
-                          ContractCertificate: ContractCertificate
-                      )
-                  );
+            var stored = await ContractCertificatePool.Add(
+                                   new SignedContractData(
+                                       EMAId,
+                                       PCID,
+                                       SignedData,
+                                       XSDMsgDefNamespace,
+                                       Metadata,
+                                       Signer.Root.Certificate.SHA256Fingerprint,
+                                       ContractCertificate: ContractCertificate
+                                   )
+                               );
+
+            if (OnContractStored is not null)
+                await OnContractStored.Invoke(stored, existing is not null);
 
             return null;
 

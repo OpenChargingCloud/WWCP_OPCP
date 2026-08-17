@@ -206,6 +206,7 @@ namespace cloud.charging.open.protocols.opcp.Tests.Infrastructure
             webhookAPI.AttachTo(rcpAPI);
             webhookAPI.AttachTo(pcpAPI);
             webhookAPI.AttachTo(ccpAPI);
+            webhookAPI.AttachTo(cpsAPI);
 
             #endregion
 
