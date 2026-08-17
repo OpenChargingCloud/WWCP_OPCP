@@ -57,6 +57,18 @@ namespace cloud.charging.open.protocols.opcp.Tests.Infrastructure
         /// <summary>How a client addresses this ecosystem.</summary>
         protected OPCPEndpointConfig  endpointConfig = null!;
 
+        /// <summary>The ecosystem's three certificate hierarchies.</summary>
+        protected PnCTestPKI       pki           = null!;
+
+        /// <summary>Answers for the certificates the vehicle manufacturers' issuing CA signed.</summary>
+        protected OCSPResponder    oemResponder  = null!;
+
+        /// <summary>Serves that responder over HTTP.</summary>
+        protected OCSP_HTTPAPI     ocspAPI       = null!;
+
+        /// <summary>Where the responder answers.</summary>
+        protected URL              ocspURL;
+
         #endregion
 
         #region Setup / teardown
@@ -87,6 +99,19 @@ namespace cloud.charging.open.protocols.opcp.Tests.Infrastructure
                                   httpServer,
                                   AccessTokenValidator: tokenIssuer
                               );
+
+            // One infrastructure for the whole fixture: building it means generating fourteen
+            // key pairs, which is cheap once and wasteful per test.
+            pki             = new PnCTestPKI();
+
+            oemResponder    = new OCSPResponder(pki.OEMSubCA2);
+
+            ocspAPI         = new OCSP_HTTPAPI(
+                                  httpServer,
+                                  oemResponder
+                              );
+
+            ocspURL         = URL.Parse($"{baseURL}/ocsp/");
 
         }
 

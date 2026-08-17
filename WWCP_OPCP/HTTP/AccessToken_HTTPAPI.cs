@@ -204,7 +204,7 @@ namespace cloud.charging.open.protocols.opcp
                                     Encoding.UTF8.GetBytes(tokenRequest.ClientSecret)
                                 );
 
-                    if (!known)
+                    if (!known || client is null)
                         return Task.FromResult(
                                    OAuthError(request,
                                               HTTPStatusCode.Unauthorized,

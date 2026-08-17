@@ -425,6 +425,32 @@ not be asking.
 * The client reads OAuth2's `{error, error_description}` as well as the OPCP error shape: the token
   endpoint is an OAuth2 endpoint before it is an OPCP one.
 
+**Phase 3 — done**, except CRLs.
+
+* `PnCTestPKI` builds all three hierarchies ISO 15118 needs — a V2G root over the charging
+  infrastructure, contract signing and operators without a PKI of their own; an OEM root over what a
+  vehicle is born with; and a root for an operator that brings its own — each Root → Sub-CA 1 →
+  Sub-CA 2 → leaf, on any of the three curves. Plus a fourth root nobody trusts, for testing what
+  happens when a certificate chains somewhere unexpected.
+* `PnCChainValidator` implements the shell model, the trust-anchor check and the ISO 15118 rule that
+  a leaf's common name *is* the identifier. It walks the path with BouncyCastle rather than the
+  platform's chain engine, for the Ed448 reason and because certificates arrive in request bodies
+  rather than in a certificate store. A matching issuer name is checked first as a cheap filter, but
+  only the signature decides.
+* `OCSPResponder`, `OCSPClient` and `OCSP_HTTPAPI` are RFC 6960, unauthenticated as the specification
+  requires. Everything that can go wrong — unreachable responder, unsigned answer, answer about a
+  different certificate — comes back as **Unknown, never as Good**. What to do about not knowing is
+  the caller's decision; the pools refuse.
+* `CSRBuilder` creates PKCS#10 requests, which Hermod cannot: it can only sign them.
+* **CRLs are deferred.** OCSP covers what phase 4's validation pipeline needs, and the specification
+  treats revocation lists as the alternative path ("if applicable"). They belong with whichever phase
+  first meets a deployment that publishes one.
+
+Two things about Hermod's certificate factory, learned by having tests fail on them: a certificate is
+clamped to its issuer's validity (asking for a thirty-year leaf under a ten-year sub-CA gives a
+ten-year leaf), and certificates are issued starting slightly in the past, so that a verifier whose
+clock runs behind does not reject one that was just issued.
+
 ## 9. Decisions taken (overridable)
 
 1. **Namespace `cloud.charging.open.protocols.opcp`** (lowercase protocol segment, PascalCase sub-namespaces) without version suffix (single major version; split later if v2 breaks).
