@@ -1,6 +1,6 @@
 # WWCP OPCP — Implementation Plan
 
-**Target:** A modern C# / .NET 10 implementation of Hubject's **Open Plug&Charge Protocol (OPCP) 1.0.0**
+**Target:** A modern C# / .NET 11 implementation of Hubject's **Open Plug&Charge Protocol (OPCP) 1.0.0**
 (spec submodule: [libs/OPCP](../libs/OPCP), commit `de066c8`, 2026-04-02), built on
 **Vanaheimr Hermod** (HTTP) and **Styx/Illias** (JSON, ids, utilities), tested self-contained with **NUnit**.
 
@@ -66,7 +66,7 @@ WWCP_OPCP/
 **`WWCP_OPCP/WWCP_OPCP.csproj`**
 
 ```xml
-<TargetFramework>net10.0</TargetFramework>
+<TargetFramework>net11.0</TargetFramework>
 <LangVersion>preview</LangVersion>
 <Nullable>enable</Nullable>
 <ImplicitUsings>enable</ImplicitUsings>

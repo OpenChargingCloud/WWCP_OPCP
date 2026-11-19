@@ -1,6 +1,6 @@
 # WWCP_OPCP
 
-A C# / .NET 10 implementation of Hubject's Open Plug&Charge Protocol (OPCP) 1.0.0 — clients *and*
+A C# / .NET 11 implementation of Hubject's Open Plug&Charge Protocol (OPCP) 1.0.0 — clients *and*
 servers for all six components (RCP, PCP, CPS, CCP, EST, Webhooks) plus the OAuth2 token endpoint.
 
 ## Orientation

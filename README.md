@@ -1,6 +1,6 @@
 # WWCP OPCP
 
-A C# / .NET 10 implementation of [Hubject's Open Plug&Charge Protocol
+A C# / .NET 11 implementation of [Hubject's Open Plug&Charge Protocol
 (OPCP)](https://github.com/hubject/opcp) — the set of REST interfaces that carry ISO 15118
 Plug&Charge certificates between the parties of an e-mobility ecosystem: vehicle manufacturers,
 e-mobility providers, charge point operators and the certificate pools between them.
